@@ -28,7 +28,7 @@ not compiled size.
 | `FUN_00aa149c` | 1,660 | Very large table/state algorithm with 64 CALBASE references and dense pointer arithmetic | High-priority unknown |
 | `FUN_00a39150` | 1,260 | Large diagnostic monitor bank: 92 DTC submissions and more than 100 calibration references | Framework known; DTC dictionary required |
 | `main` | 1,000 | Tick-gated 100-phase scheduler and background integrity work | Covered |
-| `FUN_00a19328` | 962 | Powertrain calculation using ignition/cylinder state and numerous 2D/3D calibration lookups | Partial; likely high torque/combustion leverage |
+| `FUN_00a19328` | 962 | Torque/load arbitration and publication stage; exact `8900689277A` counterpart is named `torque_to_load_target_inner` | Strong cross-version identity; ROW globals and external request semantics remain partial |
 | `FUN_00a30f20` | 798 | Idle target, compensation, and learned corrections | Covered in powertrain report; should be renamed |
 | `FUN_00a825ac` | 774 | Diagnostic lifecycle/record worker | Covered structurally; record fields still need typing |
 | `injection` | 754 | Dual-bank mixture, injector characterization, purge accounting, pulse limiting, and six-cylinder scheduling inputs | Covered in the fuel/air report |
@@ -86,7 +86,10 @@ These dictionaries will resolve dozens of anonymous monitor and service function
 
 The dedicated report now recovers pedal-to-demand, manual/IPS selection and shift coordination,
 torque/load conversions, fast spark/fuel versus slow ETB authority, and bounded cruise/ESP/launch
-evidence. Remaining leverage is in the absent normal-CAN descriptor contents: message IDs, scaling,
+evidence. The exact `8900689277A` export adds high-confidence names for the ROW torque-to-load,
+slow throttle, limiter, ignition-blend, and ignition-aggregation counterparts, and directly exposes a
+200 Hz per-cylinder torque-reduction stage missing from the ROW export. Remaining leverage is in
+recovering that ROW body and the absent normal-CAN descriptor contents: message IDs, scaling,
 validity and external request semantics, plus proof of which retained launch/traction modes are active.
 
 ### 3. Knock acquisition and adaptation

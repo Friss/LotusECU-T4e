@@ -17,7 +17,7 @@ The central conclusion is that this is primarily a **load/throttle-based coordin
 2. **Confirmed slow-path arbitration:** `FUN_00a25768` forms a candidate from pedal/load demand, substitutes or clamps an external request (`DAT_40003680`) according to status bits (`DAT_40003682`), then applies rev-limit, fault, airflow/injector-capacity, coolant/load, gear, idle, and slew-rate constraints. The operative pattern is repeated minimum selection followed by rate limiting ([emira.c:41966](../emira.c#L41966), [emira.c:41996](../emira.c#L41996), [emira.c:42007](../emira.c#L42007), [emira.c:42040](../emira.c#L42040), [emira.c:42137](../emira.c#L42137), [emira.c:42143](../emira.c#L42143), [emira.c:42147](../emira.c#L42147), [emira.c:42181](../emira.c#L42181), [emira.c:42192](../emira.c#L42192), [emira.c:42335](../emira.c#L42335)).
 3. **Confirmed transmission variants:** the application selects separate manual/IPS pedal, ignition, gear-limit, and other calibration families. A six-speed ratio estimator divides engine speed by a drivetrain-speed input and compares it with six calibrated windows; another path can obtain gear from an external interface ([emira.c:34202](../emira.c#L34202), [emira.c:90913](../emira.c#L90913), [emira.c:91567](../emira.c#L91567), [emira.c:91700](../emira.c#L91700), [emira.c:91723](../emira.c#L91723), [emira.c:91727](../emira.c#L91727), [emira.c:91746](../emira.c#L91746), [emira.c:91797](../emira.c#L91797)).
 4. **Confirmed shift-coordination machinery:** an optional module calculates per-gear candidates and flags, uses current gear, drivetrain speed, pedal, acceleration-like signals, and six gear-dependent speed values, then publishes two flags plus two gear/state values through `FUN_00a4fe28`. The precise names “rev match,” “upshift request,” and “downshift request” remain inferred rather than proved ([emira.c:46894](../emira.c#L46894), [emira.c:46913](../emira.c#L46913), [emira.c:46937](../emira.c#L46937), [emira.c:47290](../emira.c#L47290), [emira.c:47321](../emira.c#L47321), [emira.c:47345](../emira.c#L47345), [emira.c:47348](../emira.c#L47348)).
-5. **Confirmed fast output reduction mechanisms:** a six-cylinder mask generator can select zero through six cylinders in balanced/rotating patterns, and the ignition subsystem maintains six cylinder-specific timing outputs before scheduling each event. A hard rev limit also asserts injection-control flags immediately ([emira.c:29241](../emira.c#L29241), [emira.c:29249](../emira.c#L29249), [emira.c:29268](../emira.c#L29268), [emira.c:29303](../emira.c#L29303), [emira.c:91068](../emira.c#L91068), [emira.c:91307](../emira.c#L91307), [emira.c:91527](../emira.c#L91527), [emira.c:50405](../emira.c#L50405), [emira.c:50412](../emira.c#L50412)).
+5. **Confirmed fast output reduction mechanisms:** a six-cylinder mask generator can select zero through six cylinders in balanced/rotating patterns, and the ignition subsystem maintains six cylinder-specific timing outputs before scheduling each event. A hard rev limit also asserts injection-control flags immediately ([emira.c:29241](../emira.c#L29241), [emira.c:29249](../emira.c#L29249), [emira.c:29268](../emira.c#L29268), [emira.c:29303](../emira.c#L29303), [emira.c:91068](../emira.c#L91068), [emira.c:91307](../emira.c#L91307), [emira.c:91527](../emira.c#L91527), [emira.c:50405](../emira.c#L50405), [emira.c:50412](../emira.c#L50412)). The exact `8900689277A` export additionally exposes `torque_limiter`, `torque_reduction_actuator`, cylinder-cut helpers, `ignition_timing_blend`, and `ignition_calc_main`; this independently confirms the combined ETB, spark-retard, and cylinder-specific architecture while remaining cross-version evidence for this ROW image.
 6. **Cruise, traction, ESP, launch, and transmitted torque are only partly recovered:** explicit enum vocabulary exists, and anonymous external status/limit inputs clearly receive authority in the demand arbiter. However, enum declarations alone do not establish that these features are enabled in this ROW calibration, and the current trace does not prove their signal-to-CAN mapping.
 
 ## 1. Driver pedal to normalized engine demand
@@ -46,7 +46,11 @@ The mapped value `DAT_40003676` is multiplied by a byte-scale factor `DAT_400036
 
 ## 2. Load/throttle arbitration and limit order
 
-`FUN_00a25768` is the best recovered view of the slow engine-output arbiter. The quantities behave like normalized load/throttle commands (several clamp at `0x400` or `0xfff`); they should not be relabeled Nm without a separate conversion trace.
+`FUN_00a25768` is the best recovered view of the slow engine-output arbiter. Structural comparison
+with exact firmware `8900689277A` identifies it as `throttle_and_torque_control`; the ROW address is
+recorded in `../8900689277A_cross_variant_names.txt`. The quantities behave like normalized
+load/throttle commands (several clamp at `0x400` or `0xfff`); they should not be relabeled Nm without
+a separate conversion trace.
 
 The visible ordering is:
 
@@ -105,6 +109,13 @@ That is a confirmed rapid cylinder-selection mechanism. Its upstream requester m
 ### 4.3 Fast path: spark
 
 `FUN_00a92f30` is a six-cylinder ignition aggregation routine: it combines base timing and multiple corrections into per-cylinder arrays, while `FUN_00a93adc(cylinder)` schedules the selected cylinder using its individual timing and duration/dwell value ([emira.c:91068](../emira.c#L91068), [emira.c:91302](../emira.c#L91302), [emira.c:91307](../emira.c#L91307), [emira.c:91311](../emira.c#L91311), [emira.c:91527](../emira.c#L91527), [emira.c:91532](../emira.c#L91532)). This proves fast cylinder-specific spark authority. It does not by itself prove which correction is an ESP or shift retard request.
+
+The exact `8900689277A` export resolves the corresponding functions as `ignition_calc_main` and
+`ignition_timing_blend`, and its torque subsystem feeds a doubled 8x8 retard lookup result into this
+path. It also runs `torque_reduction_actuator` from `main_task_200hz_2` and maintains per-cylinder
+retard/cut state. This makes the multi-actuator interpretation direct for `8900689277A` and strongly
+supports the matching ROW architecture. It does not identify the external feature that requested a
+given intervention, and the reduction-actuator body itself is absent from the ROW export.
 
 ### 4.4 Hard rev cut
 
@@ -184,13 +195,13 @@ The important architectural distinction is **authority versus actuator**. Cruise
 
 1. Trace writers of `DAT_40003704`, `DAT_40003708`, `DAT_40003680`, and `DAT_40003682` back to their frame decoders. This is the shortest route to separating cruise, transmission, and ESP authority.
 2. Follow `FUN_00a4f648`, `FUN_00a4fe28`, and `FUN_00a4fefc` through the interface layer into CAN packing to identify actual transmitted signals and scale.
-3. Trace the six-cylinder count/mask request `DAT_4000368c` backward to enumerate rev-limit, traction, shift, and diagnostic requesters.
+3. Use the exact `8900689277A` `torque_limiter`, `torque_reduction_actuator`, and cylinder-cut helpers to trace the six-cylinder count/mask request backward, then verify the corresponding ROW call boundary before assigning rev-limit, traction, shift, or diagnostic requesters.
 4. Find executable users of the four wheel-speed fields rather than relying on the retained `wheelspeeds_int` declaration.
 5. Correlate `DAT_40003774` bits `0x20` and `0x100` with decoded mode inputs before assigning Tour/Sport/Race labels.
 6. Trace the per-gear speed values returned by `FUN_00a9409c` to the actuator side to decide whether `FUN_00a2e63c` implements rev matching, shift indication, or both.
 
 ## Bottom line
 
-The ROW Emira image contains a sophisticated, layered engine-output coordinator: validated pedal demand is shaped by driveline and mode, external modules can request or cap demand, safety/capacity bounds select the lowest allowable slow-path target, and gear-dependent slew limits smooth ETB/load changes. In parallel, cylinder masks and per-cylinder spark provide fast authority. Manual and IPS variants are unequivocally present, including six-speed gear estimation and shift/target-gear coordination.
+The ROW Emira image contains a sophisticated, layered engine-output coordinator: validated pedal demand is shaped by driveline and mode, external modules can request or cap demand, safety/capacity bounds select the lowest allowable slow-path target, and gear-dependent slew limits smooth ETB/load changes. In parallel, cylinder masks and per-cylinder spark provide fast authority. The exact `8900689277A` export independently confirms distinct torque-limit calculation, slow throttle/load control, ignition blending, and per-cylinder fast-reduction stages. Manual and IPS variants are unequivocally present, including six-speed gear estimation and shift/target-gear coordination.
 
 The code also retains explicit cruise, ESP, traction, race, and launch concepts, but the evidence does not yet justify claiming all are active or assigning their CAN signals. The defensible boundary is: **common external torque/load authority is active; the feature-specific producers and transmitted torque messages remain to be resolved.**

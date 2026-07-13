@@ -2,9 +2,10 @@
 
 ## Scope
 
-This directory analyzes the G6 engine ECU firmware used by the 2022 Lotus Emira V6. The checked-in
-target is `8896915220A_ROW`, an NXP MPC5777-family PowerPC application. The bootloader transfers
-control to application entry `init` at `0x00a00100`.
+This directory analyzes the G6 engine ECU firmware used by the 2022 Lotus Emira V6. It now contains
+two NXP MPC5777-family PowerPC application exports: the primary analysis target
+`8896915220A_ROW` and Donour's exact-definition target `8900689277A`. Both transfer control to
+application entry `init` at `0x00a00100`.
 
 The primary artifact is a 105,899-line Ghidra C export, not compilable source. Most functions and
 globals remain automatically named, so analysis reports distinguish confirmed dataflow from
@@ -19,13 +20,18 @@ cross-model inference and unresolved behavior.
 | `8896915220A_ROW/boot_names.txt` | Verified boot flash/CRC/programming names |
 | `8896915220A_ROW/boot_crypto_names.txt` | Verified boot framing and seed/key names |
 | `8896915220A_ROW/inj_names.txt` | Verified injection-path naming ledger |
+| `8896915220A_ROW/8900689277A_cross_variant_names.txt` | Names supported by structural comparison with the second firmware; not direct ROW symbols |
 | `8896915220A_ROW/analysis/` | Evidence-backed subsystem reports and Evora comparison map |
-| `../romraider-defs/8900689277A-emira.xml` | Same-family 64 KiB Emira definition from Donour `master_t6e`; structurally cross-checked, but its calibration ID differs from the analyzed target |
+| `8900689277A/emira.c` | Exact-target decompiler export paired with the `8900689277A` definition |
+| `8900689277A/*names.txt` | Donour's reviewed/working function, RAM, and calibration naming ledgers |
+| `8900689277A/torque_analysis.md` | Donor discovery note; use with the corrections in the reconciliation report |
+| `../romraider-defs/8900689277A-emira.xml` | Exact-ID 64 KiB definition for the second export; same-family only for the primary ROW target |
 
 The raw `emirabinary.hex` referenced by the bootloader note, a Ghidra archive/symbol CSV, exact stock
-calibration bytes, pinout, CAN captures/DBC, and a second firmware variant are not currently checked
-in. The available RomRaider XML identifies calibration `8900689277A`, not analyzed target
-`8896915220A_ROW`; that version gap is an important confidence boundary.
+calibration bytes, pinout, and CAN captures/DBC are not currently checked in. A second decompiler
+export now identifies calibration `8900689277A`, matching the available RomRaider XML, but the
+primary reports analyze `8896915220A_ROW`; that version gap remains an important confidence
+boundary.
 
 ## High-confidence architecture
 
@@ -78,12 +84,13 @@ in. The available RomRaider XML identifies calibration `8900689277A`, not analyz
 
 ## Calibration status
 
-The calibration block is structurally clear, and Donour's same-family `8900689277A` XML provides 96
-top-level objects. A reproducible audit finds at least one direct code-address match for 58 objects
-and complete data/axis-address matches for 54. Only eight objects have meaningful `CAL_` symbols in
-the decompiler itself. The XML is a strong naming and structure seed, but the ID mismatch, absent
-stock bytes, unverified scaling, CRC coverage, and signature packaging prevent an exact
-`8896915220A_ROW` tuning-readiness claim.
+The calibration block is structurally clear, and Donour's `8900689277A` XML provides 96 top-level
+objects. A reproducible ROW audit finds at least one direct code-address match for 58 objects and
+complete data/axis-address matches for 54. The newly added exact-ID export independently confirms
+many of those same block-relative table identities and supplies substantially more names. The XML
+and exact export form a strong pair for `8900689277A`, but absent stock bytes, unverified scaling,
+CRC/signature packaging, and the ROW ID mismatch still prevent a tuning-readiness claim for
+`8896915220A_ROW`.
 
 Treat the block-relative offset as the portable identifier. Do not confuse persistent flash
 `0x0002xxxx` addresses with the runtime RAM shadow at `0x4002e000`.
@@ -117,6 +124,7 @@ Treat the block-relative offset as the portable identifier. Do not confuse persi
 | `analysis/START_LOCKOUT_AND_ENGINE_SHUTDOWN_ANALYSIS.md` | Integrity/sync combustion gate, running state, after-run, persistent writes, safe output and power-hold release |
 | `analysis/REMAINING_CODE_AUDIT.md` | Exact symbol-debt counts, largest anonymous functions, covered domains, and highest-leverage unresolved clusters |
 | `analysis/EVORA_TO_EMIRA_ANALYSIS_MAP.md` | Mapping of all 21 Evora GT430 reports to Emira evidence and prioritized backlog |
+| `analysis/8900689277A_RECONCILIATION.md` | Cross-firmware function/table map, torque-path upgrades, donor-note corrections, and remaining version boundaries |
 
 ## Working rules
 

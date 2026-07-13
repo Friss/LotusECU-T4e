@@ -237,12 +237,17 @@ arbiter visibly combines several external bounds and chooses the most restrictiv
 strong evidence that stability/traction and external torque limits enter the throttle hierarchy.
 
 However, enum declarations do not identify the live state variable, and the relevant CAN receive
-signals and torque units remain anonymous. Consequently this pass cannot yet confirm:
+signals and torque units remain anonymous. The exact `8900689277A` export independently identifies
+the corresponding slow path as `throttle_and_torque_control`, exposes `torque_limiter` and a 200 Hz
+`torque_reduction_actuator`, and names the corresponding ignition blend/main calculation. It proves
+that the same-family design combines slow ETB/load control with spark-retard and cylinder-specific
+fast authority. Consequently this pass still cannot confirm:
 
 - which CAN IDs/signals carry ESP, traction, gearbox, or cruise requests;
 - the ordering of driver demand, engine maximum torque, gearbox limit, ESP limit and cruise demand;
-- whether fast torque reduction uses spark retard, cylinder cut, throttle, or a calibrated blend;
-- the exact mapping from modeled torque to throttle/load.
+- which external requests select spark retard, cylinder cut, throttle, or a calibrated blend in the
+  ROW image;
+- the exact engineering-unit mapping from modeled torque to throttle/load.
 
 ## VVT, thermal management, and idle-related temperature protection
 
@@ -343,8 +348,9 @@ Important differences in current evidence:
 
 ## Highest-value next steps
 
-1. Rename the throttle routines and TPS variables beginning at `o2_sensor_state_machine___()`, then
-   trace every external limit entering `FUN_00a25768()` back to CAN receive code.
+1. Apply the reconciled cross-version name `throttle_and_torque_control` to `FUN_00a25768()` with
+   explicit provenance, recover the missing ROW counterpart of the donor's 200 Hz
+   `torque_reduction_actuator`, then trace every external limit back to CAN receive code.
 2. Recover the missing knock acquisition ISR and mode-4 detector callback, then extract stock mode,
    frequency, window, threshold, and correction bytes from the canonical calibration.
 3. Name the air-path sensor variables in `engine_load___()` by following ADC/CAN writers, then

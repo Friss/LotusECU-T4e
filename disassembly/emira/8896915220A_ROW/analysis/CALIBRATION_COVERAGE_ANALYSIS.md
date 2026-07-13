@@ -4,9 +4,10 @@ Target: 2022 Lotus Emira V6 ROW firmware `8896915220A_ROW`, MPC5777C.
 
 ## Executive summary
 
-The application has a complete 64 KiB calibration segment. The Ghidra export alone is sparsely named,
-but Donour's `8900689277A` RomRaider definition now supplies a substantial same-family address map. At
-startup `copy_calrom_to_calbase()` copies flash
+The application has a complete 64 KiB calibration segment. The primary Ghidra export alone is
+sparsely named, but Donour's `8900689277A` RomRaider definition supplies a substantial same-family
+address map and the matching-ID second code export now independently confirms many of its table
+identities. At startup `copy_calrom_to_calbase()` copies flash
 `0x00020000..0x0002ffff` to RAM `0x4002e000..0x4003dfff` and sets `CALBASE_addr` to the RAM copy
 (`emira.c:24822-24828`). `select_calbase_addr()` can instead point consumers directly at flash
 (`emira.c:24832-24842`). Nearly all consumers use `CALBASE_addr + offset`, which makes the offset
@@ -24,8 +25,10 @@ semantic naming and byte validation, not an absence of recoverable table structu
 
 `ROMRAIDER_DEFINITION_VALIDATION.md` cross-checks the `8900689277A` XML against that inventory. Of 96
 top-level objects, 58 have at least one direct code-address match and 54 have every listed data/axis
-address directly matched. This is strong family-layout evidence, but not exact-version validation:
-the analyzed target is `8896915220A_ROW`, and neither target's canonical calibration bytes are present.
+address directly matched. The second export makes the XML an exact code/definition pair for
+`8900689277A` and supplies cross-version names for the ROW analysis. It is still not byte-level
+validation: the primary target is `8896915220A_ROW`, and neither target's canonical calibration bytes
+are present.
 
 ## Calibration storage and validation
 
@@ -98,12 +101,13 @@ stock bytes have all been verified.
 | Torque/throttle | Broad named coverage | Logic is present; calibration offsets mostly anonymous |
 | VVT/idle/thermal | Broad named coverage | Numerous lookup families, almost no calibration names |
 | Diagnostics | Named thresholds/masks | Many offsets visible, semantic names largely absent |
-| Definition artifact | XML/CPT artifacts exist | Same-family `8900689277A` RomRaider XML is present and structurally cross-checked; exact `8896915220A_ROW` compatibility is unproved |
+| Definition artifact | XML/CPT artifacts exist | Matching-ID `8900689277A` XML and code export are present and structurally reconciled; exact `8896915220A_ROW` compatibility is unproved |
 
 See `CALIBRATION_LOOKUP_INVENTORY.md` for the call-level population, dimensions, reuse, domain
-density, extractor, and machine-readable CSV. See `ROMRAIDER_DEFINITION_VALIDATION.md` and
-`emira_romraider_definition_crosswalk.csv` for the XML-to-code audit. Direct address matches validate
-structure, not exact target bytes, engineering scaling, or safe-edit status.
+density, extractor, and machine-readable CSV. See `ROMRAIDER_DEFINITION_VALIDATION.md`,
+`8900689277A_RECONCILIATION.md`, and `emira_romraider_definition_crosswalk.csv` for the XML-to-code
+and cross-firmware audits. Direct address matches validate structure, not exact target bytes,
+engineering scaling, or safe-edit status.
 
 ## Required work before tuning use
 
