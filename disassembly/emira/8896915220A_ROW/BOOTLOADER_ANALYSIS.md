@@ -1,5 +1,11 @@
 # Lotus Emira ECU Bootloader Analysis
 
+> **Historical note:** this early report contains superseded range, entry-point, signature-location,
+> and enforcement claims. Use `analysis/BOOTLOADER_PROGRAMMING_ANALYSIS.md` for the current
+> code-validated result. In particular, boot code is not confined to `0x00810000..0x0081ffff`,
+> `FUN_00810000` is not the reset entry, the signature address is unresolved, and an all-`0xff`
+> public-key region causes the visible RSA policy to accept the image.
+
 ## Firmware Structure
 
 The `emirabinary.hex` file contains the complete firmware for the 2022 Lotus Emira V6 ECU (MPC5777 controller).
