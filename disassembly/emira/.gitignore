@@ -1,2 +1,4 @@
 emirabinary.hex
 .claude/
+__pycache__/
+*.pyc

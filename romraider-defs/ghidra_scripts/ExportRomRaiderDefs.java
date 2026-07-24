@@ -93,11 +93,16 @@ public class ExportRomRaiderDefs extends GhidraScript {
 			return new String [] {"MAF bin 1","MAF bin 2","MAF bin 3","MAF bin 4","MAF bin 5","MAF bin 6","MAF bin 7","MAF bin 8"};
 
 		if (n.equals("CAL_traction_slip_threshold_per_gear_ips")
-			|| n.equals("CAL_traction_slip_threshold_per_gear_manual"))
+			|| n.equals("CAL_traction_slip_threshold_per_gear_manual")
+			|| n.equals("CAL_slip_slip_threshold_per_gear_ips")
+			|| n.equals("CAL_slip_threshold_per_gear_manual"))
 			return new String [] {"1st","2nd","3rd","4th","5th"};
 		if (n.equals("CAL_traction_gear_speed_ratios_ips")
 			|| n.equals("CAL_traction_gear_speed_ratios_long")
-			|| n.equals("CAL_traction_gear_speed_ratios_cr"))
+			|| n.equals("CAL_traction_gear_speed_ratios_cr")
+			|| n.equals("CAL_slip_gear_speed_ratios_ips")
+			|| n.equals("CAL_slip_gear_speed_ratios_long")
+			|| n.equals("CAL_slip_gear_speed_ratios_cr"))
 			return new String [] {"1st","2nd","3rd","4th","5th", "6th"};
 
 		if (
@@ -247,6 +252,7 @@ public class ExportRomRaiderDefs extends GhidraScript {
 		new DF("u8_time_hours","uint8","hours","x","x","0","1","5","Hours"),
 		new DF("u16_time_25ns","uint16","ns","x*25","x/25","0","25","100","Nanosecond"),
 		new DF("u16_time_us","uint16","us","x","x","0","1","10","microseconds"),
+		new DF("u16_time_ms","uint16","ms","x","x","0","1","10","Millisecond"),
 		new DF("u16_time_4us","uint16","rpm","15000000/x","15000000/x","0","1","10","RPM"),
 		new DF("i16_time_us","int16","us","x","x","0","1","10","Microsecond"),
 		new DF("u16_time_5ms","uint16","s","x*5/1000","x*1000/5","0.00","0.1","1","Second"),
@@ -493,6 +499,8 @@ public class ExportRomRaiderDefs extends GhidraScript {
 		SymRecBase(String n, long o, String c) throws Exception {
 			name = n;
 			offset = o;		
+			Matcher signature = Pattern.compile("(T6-[^#]+#.*)").matcher(c);
+			if (signature.find()) c = signature.group(1);
 			String[] d = c.split("#");
 			if (d.length < 11)
 				throw new Exception(String.format("XXX_base has not enough info (%s)", n));
@@ -565,8 +573,8 @@ public class ExportRomRaiderDefs extends GhidraScript {
 		private final Pattern symFormat;
 		SymRecBase base;
 		List<SymRec> syms = new ArrayList<>();
-		HashMap<String,SymRec> Xsyms = new HashMap<>();
-		HashMap<String,SymRec> Ysyms = new HashMap<>();
+		HashMap<String,List<SymRec>> Xsyms = new HashMap<>();
+		HashMap<String,List<SymRec>> Ysyms = new HashMap<>();
 
 		Syms(String prefix) {
 			this.prefix = prefix;
@@ -583,10 +591,9 @@ public class ExportRomRaiderDefs extends GhidraScript {
 				SymRec s = new SymRec(n, m.group(1), m.group(4), o, dt, c);
 				if (m.group(3) != null) {
 					String key = prefix+m.group(1)+"_"+m.group(2);
-					HashMap<String,SymRec> h = Xsyms;
+					HashMap<String,List<SymRec>> h = Xsyms;
 					if (m.group(3).equals("Y")) h = Ysyms;
-					if (h.put(key, s) != null)
-						throw new Exception("Axis collision: "+n);
+					h.computeIfAbsent(key, ignored -> new ArrayList<>()).add(s);
 				} else syms.add(s);
 			}
 		}
@@ -597,8 +604,15 @@ public class ExportRomRaiderDefs extends GhidraScript {
 			syms.sort(Comparator.comparing(r -> r.name));
 			//syms.sort(Comparator.comparingLong(r -> r.offset));
 			syms.forEach(i -> i.offset -= base.offset);
-			Xsyms.values().forEach(i -> i.offset -= base.offset);
-			Ysyms.values().forEach(i -> i.offset -= base.offset);
+			Xsyms.values().forEach(list -> list.forEach(i -> i.offset -= base.offset));
+			Ysyms.values().forEach(list -> list.forEach(i -> i.offset -= base.offset));
+		}
+
+		SymRec findAxis(HashMap<String,List<SymRec>> axes, SymRec table) {
+			List<SymRec> candidates = axes.get(table.name);
+			if (candidates == null || candidates.isEmpty()) return null;
+			return candidates.stream().min(Comparator.comparingLong(
+				axis -> Math.abs(axis.offset - table.offset))).orElse(null);
 		}
 	}
 
@@ -815,8 +829,8 @@ public class ExportRomRaiderDefs extends GhidraScript {
 			else if (s.name.startsWith("CAL_misc_shift_lights_before_rev_limit"))
 				addXml2DFixed(doc, parent, s, "Gear Number", getDataformat("uint8_t"));
 			else {
-				SymRec sx = s2.Xsyms.get(s.name);
-				SymRec sy = s2.Ysyms.get(s.name);
+				SymRec sx = s2.findAxis(s2.Xsyms, s);
+				SymRec sy = s2.findAxis(s2.Ysyms, s);
 				if (sx != null) {
 					if(sx.dataformats != null) {
 						if (sy != null) {

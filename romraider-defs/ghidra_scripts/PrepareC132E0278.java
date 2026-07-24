@@ -9,10 +9,19 @@ import java.nio.file.Files;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.data.AbstractIntegerDataType;
+import ghidra.program.model.data.ArrayDataType;
+import ghidra.program.model.data.BuiltInDataTypeManager;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeConflictHandler;
+import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.Pointer32DataType;
+import ghidra.program.model.data.TypedefDataType;
 import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Listing;
@@ -176,6 +185,7 @@ public class PrepareC132E0278 extends GhidraScript {
         int functions = 0;
         int labels = 0;
         int comments = 0;
+        int typed = 0;
         int errors = 0;
 
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFile))) {
@@ -187,6 +197,7 @@ public class PrepareC132E0278 extends GhidraScript {
             int nameColumn = findColumn(columns, "Name");
             int locationColumn = findColumn(columns, "Location");
             int kindColumn = findColumn(columns, "Type");
+            int dataTypeColumn = findColumn(columns, "Data Type");
             int commentColumn = findColumn(columns, "EOL Comment");
 
             String line;
@@ -198,6 +209,7 @@ public class PrepareC132E0278 extends GhidraScript {
                 String name = field(fields, nameColumn);
                 String location = field(fields, locationColumn);
                 String kind = field(fields, kindColumn);
+                String dataType = field(fields, dataTypeColumn);
                 String comment = field(fields, commentColumn);
                 if (name.isBlank() || location.isBlank()) {
                     continue;
@@ -228,6 +240,10 @@ public class PrepareC132E0278 extends GhidraScript {
                         else if (!primary.getName().equals(name)) {
                             primary.setName(name, SourceType.USER_DEFINED);
                         }
+                        if ((name.startsWith("CAL_") || name.startsWith("LEA_")) &&
+                                !dataType.isBlank() && applyDataType(address, dataType)) {
+                            typed++;
+                        }
                         if (!comment.isBlank()) {
                             CodeUnit unit = listing.getCodeUnitContaining(address);
                             if (unit != null) {
@@ -248,7 +264,90 @@ public class PrepareC132E0278 extends GhidraScript {
         }
 
         println("Imported functions=" + functions + ", labels=" + labels +
-            ", comments=" + comments + ", errors=" + errors);
+            ", typed CAL/LEA=" + typed + ", comments=" + comments + ", errors=" + errors);
+    }
+
+    private boolean applyDataType(Address address, String typeName) throws Exception {
+        DataType dataType = resolveDataType(typeName);
+        if (dataType == null || dataType.getLength() <= 0) {
+            return false;
+        }
+        Listing listing = currentProgram.getListing();
+        Address end = address.add(dataType.getLength() - 1L);
+        listing.clearCodeUnits(address, end, false);
+        listing.createData(address, dataType);
+        return true;
+    }
+
+    private DataType resolveDataType(String typeName) {
+        if (typeName.endsWith("*")) {
+            return null;
+        }
+        int bracket = typeName.indexOf('[');
+        String baseName = bracket < 0 ? typeName.trim() : typeName.substring(0, bracket).trim();
+        DataType base = findDataType(baseName);
+        if (base == null) {
+            base = createScalarTypedef(baseName);
+        }
+        if (base == null) {
+            return null;
+        }
+
+        List<Integer> dimensions = new ArrayList<>();
+        if (bracket >= 0) {
+            Matcher matcher = Pattern.compile("\\[(\\d+)]").matcher(typeName.substring(bracket));
+            while (matcher.find()) {
+                dimensions.add(Integer.parseInt(matcher.group(1)));
+            }
+        }
+        DataType result = base;
+        for (int index = dimensions.size() - 1; index >= 0; index--) {
+            result = new ArrayDataType(result, dimensions.get(index), -1);
+        }
+        return result;
+    }
+
+    private DataType findDataType(String name) {
+        List<DataType> matches = new ArrayList<>();
+        currentProgram.getDataTypeManager().findDataTypes(name, matches);
+        if (!matches.isEmpty()) {
+            return matches.get(0);
+        }
+        BuiltInDataTypeManager.getDataTypeManager().findDataTypes(name, matches);
+        return matches.isEmpty() ? null : matches.get(0);
+    }
+
+    private DataType createScalarTypedef(String name) {
+        int width = inferIntegerWidth(name);
+        if (width == 0) {
+            printerr("RomRaider type not found and width cannot be inferred: " + name);
+            return null;
+        }
+        boolean signed = name.startsWith("i") || name.startsWith("int");
+        DataType primitive = signed
+            ? AbstractIntegerDataType.getSignedDataType(width, currentProgram.getDataTypeManager())
+            : AbstractIntegerDataType.getUnsignedDataType(width, currentProgram.getDataTypeManager());
+        DataTypeManager manager = currentProgram.getDataTypeManager();
+        return manager.addDataType(
+            new TypedefDataType(name, primitive), DataTypeConflictHandler.KEEP_HANDLER);
+    }
+
+    private int inferIntegerWidth(String name) {
+        if (name.equals("bool") || name.startsWith("enum_") ||
+                name.equals("uint8_t") || name.equals("int8_t") ||
+                name.startsWith("u8_") || name.startsWith("i8_")) {
+            return 1;
+        }
+        if (name.equals("struct_dtc_state") || name.equals("uint16_t") ||
+                name.equals("int16_t") || name.startsWith("u16_") ||
+                name.startsWith("i16_")) {
+            return 2;
+        }
+        if (name.equals("uint32_t") || name.equals("int32_t") ||
+                name.startsWith("u32_") || name.startsWith("i32_")) {
+            return 4;
+        }
+        return 0;
     }
 
     private int findColumn(String[] columns, String name) {
