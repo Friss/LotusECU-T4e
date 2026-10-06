@@ -689,6 +689,7 @@ public class ExportRomRaiderDefs extends GhidraScript {
 	@Override
 	public void run() throws Exception {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
 		DocumentBuilder builder = factory.newDocumentBuilder();
 		Document doc;
 		Element root;
